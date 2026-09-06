@@ -51,7 +51,7 @@ class AiAgentService {
   void initAgent() {
     const apiKey = String.fromEnvironment(
       'GEMINI_API_KEY',
-      defaultValue: '',
+      defaultValue: 'token',
     );
 
     _model = GenerativeModel(

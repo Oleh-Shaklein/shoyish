@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import '../settings/settings_screen.dart';
 import '../aichat/aichat_service.dart';
+import '../auth/auth_screen.dart';
 
 // Допоміжна структура для зберігання даних про місто
 class CityLocation {
@@ -28,6 +29,8 @@ class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
   final AiAgentService _aiAgent = AiAgentService();
   final TextEditingController _aiQueryController = TextEditingController();
+  bool _isAiPanelExpanded = false;
+  String _aiResponseText = '';
 
   // Список міст з їхніми реальними центральними координатами та зумом
   final List<CityLocation> _cities = [
@@ -275,7 +278,14 @@ class _MapScreenState extends State<MapScreen> {
               children: [
                 // Кнопка входу
                 ElevatedButton.icon(
-                  onPressed: () {},
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => AuthScreen(currentCenter: _selectedCity.center),
+                      ),
+                    );
+                  },
                   icon: const Icon(Icons.key, size: 18),
                   label: const Text('Вхід'),
                   style: ElevatedButton.styleFrom(
@@ -356,92 +366,184 @@ class _MapScreenState extends State<MapScreen> {
           ),
 
           // 4. НИЖНЯ ПАНЕЛЬ: Кнопки винесені НАД рядок ШІ (зліва та справа)
+// 4. НИЖНЯ ПАНЕЛЬ: Анімована шторка з підтримкою розгортання та згортання
           Positioned(
-            bottom: 24,
-            left: 16,
-            right: 16,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Рядок швидких кнопок над полем вводу (зліва — фільтри, справа — радіус)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // Кнопка фільтрів
-                      FloatingActionButton.extended(
-                        heroTag: 'filter_btn',
-                        onPressed: () => _showFiltersBottomSheet(context),
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.black87,
-                        elevation: 4,
-                        icon: const Icon(Icons.tune, size: 18, color: Colors.orange),
-                        label: const Text('Фільтри', style: TextStyle(fontSize: 12)),
-                      ),
-
-                      // Кнопка радіусу (показує поточний обраний радіус)
-                      FloatingActionButton.extended(
-                        heroTag: 'radius_btn',
-                        onPressed: () => _showRadiusBottomSheet(context),
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.black87,
-                        elevation: 4,
-                        icon: const Icon(Icons.radar, size: 18, color: Colors.orange),
-                        label: Text(_formatRadius(_radiusSteps[_radiusIndex]), style: const TextStyle(fontSize: 12)),
-                      ),
-                    ],
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+              height: _isAiPanelExpanded
+                  ? MediaQuery.of(context).size.height * 0.45
+                  : 140, // Висота у згорнутому стані (фільтри + рядок вводу)
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.15),
+                    blurRadius: 10,
+                    offset: const Offset(0, -3),
                   ),
-                ),
-
-                // Центральний рядок ШІ-запиту на всю ширину
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(30),
-                    boxShadow: const [
-                      BoxShadow(color: Colors.black38, blurRadius: 6, offset: Offset(0, 3))
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.auto_awesome, color: Colors.orange),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextField(
-                          controller: _aiQueryController, // Тільки один контролер
-                          decoration: const InputDecoration(
-                            hintText: 'Запит ШІ (напр. найдешевше латте)...',
-                            border: InputBorder.none,
+                ],
+              ),
+              child: Column(
+                children: [
+                  // Індикатор та кнопка згортання/розгортання шторки
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _isAiPanelExpanded = !_isAiPanelExpanded;
+                      });
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      color: Colors.transparent,
+                      child: Center(
+                        child: Container(
+                          width: 36,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(2),
                           ),
                         ),
                       ),
-                      IconButton(
-                        onPressed: () async {
-                          final query = _aiQueryController.text;
-                          if (query.isNotEmpty) {
-                            // Показуємо індикатор завантаження або просто чекаємо відповідь
-                            final result = await _aiAgent.askAgent(query, _selectedCity.name);
-
-                            // Очищаємо поле вводу
-                            _aiQueryController.clear();
-
-                            // Закриваємо клавіатуру
-                            FocusScope.of(context).unfocus();
-
-                            // Викликаємо шторку з результатом
-                            if (mounted) {
-                              _showAiResponseSheet(context, result);
-                            }
-                          }
-                        },
-                        icon: const Icon(Icons.send, color: Colors.orange),
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              ],
+
+                  // Рядок швидких кнопок (фільтри та радіус)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        FloatingActionButton.extended(
+                          heroTag: 'filter_btn',
+                          onPressed: () => _showFiltersBottomSheet(context),
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black87,
+                          elevation: 2,
+                          icon: const Icon(Icons.tune, size: 18, color: Colors.orange),
+                          label: const Text('Фільтри', style: TextStyle(fontSize: 12)),
+                        ),
+                        FloatingActionButton.extended(
+                          heroTag: 'radius_btn',
+                          onPressed: () => _showRadiusBottomSheet(context),
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black87,
+                          elevation: 2,
+                          icon: const Icon(Icons.radar, size: 18, color: Colors.orange),
+                          label: Text(_formatRadius(_radiusSteps[_radiusIndex]), style: const TextStyle(fontSize: 12)),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 4),
+
+                  // Центральний рядок ШІ-запиту
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[100],
+                        borderRadius: BorderRadius.circular(30),
+                        border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.auto_awesome, color: Colors.orange, size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextField(
+                              controller: _aiQueryController,
+                              onTap: () {
+                                // Автоматично розгортаємо панель, коли користувач торкається поля введення
+                                setState(() {
+                                  _isAiPanelExpanded = true;
+                                });
+                              },
+                              decoration: const InputDecoration(
+                                hintText: 'Запит ШІ (напр. найдешевше латте)...',
+                                border: InputBorder.none,
+                                hintStyle: TextStyle(fontSize: 14, color: Colors.grey),
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () async {
+                              final query = _aiQueryController.text;
+                              if (query.isNotEmpty) {
+                                // Розгортаємо панель та показуємо стан завантаження
+                                setState(() {
+                                  _isAiPanelExpanded = true;
+                                  _aiResponseText = "Шукаю найкращі варіанти у місті ${_selectedCity.name}...";
+                                });
+
+                                _aiQueryController.clear();
+                                FocusScope.of(context).unfocus();
+
+                                // Отримуємо відповідь від агента
+                                final result = await _aiAgent.askAgent(query, _selectedCity.name);
+
+                                setState(() {
+                                  _aiResponseText = result;
+                                });
+                              }
+                            },
+                            icon: const Icon(Icons.send, color: Colors.orange, size: 20),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Блок виведення відповіді ШІ (розгортається разом із панеллю)
+                  if (_isAiPanelExpanded) ...[
+                    const Divider(height: 20),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Text(
+                                  'Відповідь агента:',
+                                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.orange),
+                                ),
+                                const Spacer(),
+                                if (_aiResponseText.isNotEmpty)
+                                  TextButton.icon(
+                                    onPressed: () {
+                                      setState(() {
+                                        _aiResponseText = '';
+                                        _isAiPanelExpanded = false;
+                                      });
+                                    },
+                                    icon: const Icon(Icons.close, size: 16, color: Colors.grey),
+                                    label: const Text('Закрити', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              _aiResponseText.isEmpty ? '' : _aiResponseText,
+                              style: const TextStyle(fontSize: 14, height: 1.4, color: Colors.black87),
+                            ),
+                            const SizedBox(height: 20),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
         ],
