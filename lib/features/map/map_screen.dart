@@ -4,6 +4,7 @@ import 'package:latlong2/latlong.dart';
 import '../settings/settings_screen.dart';
 import '../aichat/aichat_service.dart';
 import '../auth/auth_screen.dart';
+import 'package:geolocator/geolocator.dart';
 
 // Допоміжна структура для зберігання даних про місто
 class CityLocation {
@@ -31,6 +32,57 @@ class _MapScreenState extends State<MapScreen> {
   final TextEditingController _aiQueryController = TextEditingController();
   bool _isAiPanelExpanded = false;
   String _aiResponseText = '';
+
+  // Додайте ці змінні у _MapScreenState:
+  LatLng? _userLocation;
+  bool _isLoadingLocation = false;
+
+// Метод для отримання поточного положення
+  Future<void> _getUserLocation() async {
+    setState(() => _isLoadingLocation = true);
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Увімкніть службові геолокації (GPS)')),
+        );
+        setState(() => _isLoadingLocation = false);
+        return;
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          setState(() => _isLoadingLocation = false);
+          return;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        setState(() => _isLoadingLocation = false);
+        return;
+      }
+
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      setState(() {
+        _userLocation = LatLng(position.latitude, position.longitude);
+        _isLoadingLocation = false;
+      });
+
+      // Центруємо карту на користувача та наближаємо
+      _mapController.move(_userLocation!, 15.0);
+
+    } catch (e) {
+      setState(() => _isLoadingLocation = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Помилка отримання GPS: $e')),
+      );
+    }
+  }
 
   // Список міст з їхніми реальними центральними координатами та зумом
   final List<CityLocation> _cities = [
@@ -82,6 +134,89 @@ class _MapScreenState extends State<MapScreen> {
     } else {
       return '$value км';
     }
+  }
+
+  // Вікно з інформацією про вибраний заклад
+  void _showVenueDetails(BuildContext context, PlaceModel place) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    place.category == 'cafe'
+                        ? Icons.coffee
+                        : place.category == 'restaurant'
+                        ? Icons.restaurant
+                        : Icons.fastfood,
+                    color: Colors.orange,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      place.name,
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const Divider(),
+              const SizedBox(height: 4),
+              Text(
+                'Категорія: ${place.category.toUpperCase()}',
+                style: const TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Теги: ${place.tags.join(', ')}',
+                style: const TextStyle(color: Colors.black87, fontSize: 14),
+              ),
+              const SizedBox(height: 20),
+
+              // Кнопка переходу до меню
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context); // Закриваємо шторку карти
+
+                    // ТУТ ПЕРЕХІД ДО ЕКРАНУ МЕНЮ
+                    // Наприклад: Navigator.push(context, MaterialPageRoute(builder: (c) => MenuScreen(place: place)));
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Перехід до меню закладу: ${place.name}')),
+                    );
+                  },
+                  icon: const Icon(Icons.menu_book, size: 18),
+                  label: const Text('Переглянути меню', style: TextStyle(fontSize: 15)),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   // Модальне вікно вибору міст
@@ -264,6 +399,72 @@ class _MapScreenState extends State<MapScreen> {
                   urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                   userAgentPackageName: 'com.example.mapmenu',
                 ),
+
+                // ШАР МАРКЕРІВ З БАЗИ ДАНИХ ШІ АГЕНТА
+                MarkerLayer(
+                    markers: [
+                    // 👉 ДОДАЙТЕ ЦЕЙ УСІЧЕНИЙ БЛОК НА ПОЧАТАК МАСИВУ МАРКЕРІВ:
+                    if (_userLocation != null)
+                      Marker(
+                      point: _userLocation!,
+                      width: 30,
+                      height: 30,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.blue,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 3),
+                          boxShadow: const [
+                            BoxShadow(blurRadius: 6, color: Colors.black26, offset: Offset(0, 2))
+                          ],
+                        ),
+                      ),
+                    ),
+                  ..._aiAgent.searchVenues('', _selectedCity.name)
+                      .where((place) {
+                    // Фільтрація за категоріями з чекбоксів
+                    if (place.category == 'cafe' && !_filterCafe) return false;
+                    if (place.category == 'restaurant' && !_filterRestaurant) return false;
+                    if (place.category == 'fastfood' && !_filterFastFood) return false;
+                    return true;
+                  })
+                      .map((place) {
+                    // Визначаємо іконку та колір залежно від категорії у PlaceModel
+                    IconData iconData = Icons.restaurant;
+                    Color markerColor = Colors.orange;
+
+                    if (place.category == 'cafe') {
+                      iconData = Icons.coffee;
+                      markerColor = Colors.brown;
+                    } else if (place.category == 'fastfood') {
+                      iconData = Icons.fastfood;
+                      markerColor = Colors.redAccent;
+                    }
+
+                    return Marker(
+                      point: LatLng(place.lat, place.lng),
+                      width: 40,
+                      height: 40,
+                      child: GestureDetector(
+                        onTap: () {
+                          // ЗАМІСТЬ SnackBar викликаємо наше нове вікно закладу:
+                          _showVenueDetails(context, place);
+                        },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: const [
+                              BoxShadow(blurRadius: 4, color: Colors.black26, offset: Offset(0, 2))
+                            ],
+                          ),
+                          child: Icon(iconData, color: markerColor, size: 20),
+                        ),
+                      ),
+                    );
+                  })
+                      .toList(),]
+                ),
               ],
             ),
           ),
@@ -339,6 +540,7 @@ class _MapScreenState extends State<MapScreen> {
           ),
 
           // 3. ЛІВА ПАНЕЛЬ НАВІГАЦІЇ (Масштабування)
+// У секції 3 (ЛІВА ПАНЕЛЬ НАВІГАЦІЇ) додайте кнопку GPS під кнопками зуму:
           Positioned(
             left: 16,
             top: 120,
@@ -360,6 +562,17 @@ class _MapScreenState extends State<MapScreen> {
                     _mapController.move(_mapController.camera.center, newZoom);
                   },
                   child: const Icon(Icons.remove),
+                ),
+                const SizedBox(height: 8),
+                // 📍 КНОПКА ГЕОЛОКАЦІЇ КОРИСТУВАЧА
+                FloatingActionButton.small(
+                  heroTag: 'my_location',
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.orange,
+                  onPressed: _getUserLocation,
+                  child: _isLoadingLocation
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.my_location),
                 ),
               ],
             ),
