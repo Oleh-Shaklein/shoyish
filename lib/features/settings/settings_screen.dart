@@ -12,6 +12,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _aiLanguage = 'Українська (як в інтерфейсі)';
   bool _isDarkMode = false;
   bool _aiVoiceHints = true;
+  bool _enableGeolocation = true;
+  bool _showRadiusCircle = true;
 
   @override
   Widget build(BuildContext context) {
@@ -58,6 +60,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onChanged: (val) {
                     setState(() {
                       _isDarkMode = val;
+                    });
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          const Text(
+            'КАРТА ТА ГЕОЛОКАЦІЯ',
+            style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Column(
+              children: [
+                SwitchListTile(
+                  secondary: const Icon(Icons.my_location, color: Colors.orange),
+                  title: const Text('Увімкнути геолокацію'),
+                  subtitle: const Text('Визначення та показ позиції на карті'),
+                  value: _enableGeolocation,
+                  activeColor: Colors.orange,
+                  onChanged: (val) {
+                    setState(() {
+                      _enableGeolocation = val;
+                    });
+                  },
+                ),
+                const Divider(height: 1),
+                SwitchListTile(
+                  secondary: const Icon(Icons.radio_button_unchecked, color: Colors.orange),
+                  title: const Text('Відображати радіус пошуку'),
+                  subtitle: const Text('Показувати візуальне коло навколо точки'),
+                  value: _showRadiusCircle,
+                  activeColor: Colors.orange,
+                  onChanged: (val) {
+                    setState(() {
+                      _showRadiusCircle = val;
                     });
                   },
                 ),

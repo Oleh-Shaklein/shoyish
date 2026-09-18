@@ -32,6 +32,7 @@ class _MapScreenState extends State<MapScreen> {
   final TextEditingController _aiQueryController = TextEditingController();
   bool _isAiPanelExpanded = false;
   String _aiResponseText = '';
+  bool _showRadiusCircle = true;
 
   // Додайте ці змінні у _MapScreenState:
   LatLng? _userLocation;
@@ -399,6 +400,20 @@ class _MapScreenState extends State<MapScreen> {
                   urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                   userAgentPackageName: 'com.example.mapmenu',
                 ),
+                if (_showRadiusCircle)
+                  CircleLayer(
+                    circles: [
+                      CircleMarker(
+                        point: _userLocation ?? _selectedCity.center,
+                        // Радіус у метрах (беремо значення з вашого масиву _radiusSteps та множимо на 1000)
+                        radius: _radiusSteps[_radiusIndex] * 1000,
+                        useRadiusInMeter: true,
+                        color: Colors.orange.withOpacity(0.12), // Напівпрозоре оранжеве заливання
+                        borderColor: Colors.orange, // Межа кола
+                        borderStrokeWidth: 2.0,
+                      ),
+                    ],
+                  ),
 
                 // ШАР МАРКЕРІВ З БАЗИ ДАНИХ ШІ АГЕНТА
                 MarkerLayer(
