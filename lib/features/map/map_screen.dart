@@ -84,6 +84,25 @@ class _MapScreenState extends State<MapScreen> {
       );
     }
   }
+  // Метод перевірки, чи потрапляє заклад у заданий радіус
+  bool _isWithinRadius(LatLng venuePoint) {
+    // Якщо геолокація користувача не визначена, вираховуємо від центру вибраного міста
+    final LatLng centerPoint = _userLocation ?? _selectedCity.center;
+
+    const Distance distanceCalculator = const Distance();
+
+    // Рахуємо відстань у метрах
+    final double distanceInMeters = distanceCalculator.as(
+      LengthUnit.Meter,
+      centerPoint,
+      venuePoint,
+    );
+
+    // Конвертуємо поточний індекс слайдеру в метри (оскільки у _radiusSteps значення в кілометрах)
+    final double maxRadiusMeters = _radiusSteps[_radiusIndex] * 1000;
+
+    return distanceInMeters <= maxRadiusMeters;
+  }
 
   // Список міст з їхніми реальними центральними координатами та зумом
   final List<CityLocation> _cities = [
@@ -418,31 +437,37 @@ class _MapScreenState extends State<MapScreen> {
                 // ШАР МАРКЕРІВ З БАЗИ ДАНИХ ШІ АГЕНТА
                 MarkerLayer(
                     markers: [
-                    // 👉 ДОДАЙТЕ ЦЕЙ УСІЧЕНИЙ БЛОК НА ПОЧАТАК МАСИВУ МАРКЕРІВ:
-                    if (_userLocation != null)
-                      Marker(
-                      point: _userLocation!,
-                      width: 30,
-                      height: 30,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.blue,
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white, width: 3),
-                          boxShadow: const [
-                            BoxShadow(blurRadius: 6, color: Colors.black26, offset: Offset(0, 2))
-                          ],
+                      if (_userLocation != null)
+                        Marker(
+                          point: _userLocation!,
+                          width: 30,
+                          height: 30,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.blue,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 3),
+                              boxShadow: const [
+                                BoxShadow(blurRadius: 6, color: Colors.black26, offset: Offset(0, 2))
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ..._aiAgent.searchVenues('', _selectedCity.name)
-                      .where((place) {
-                    // Фільтрація за категоріями з чекбоксів
-                    if (place.category == 'cafe' && !_filterCafe) return false;
-                    if (place.category == 'restaurant' && !_filterRestaurant) return false;
-                    if (place.category == 'fastfood' && !_filterFastFood) return false;
-                    return true;
-                  })
+                      ..._aiAgent.searchVenues('', _selectedCity.name)
+                          .where((place) {
+                        // Фільтрація за категоріями з чекбоксів
+                        if (place.category == 'cafe' && !_filterCafe) return false;
+                        if (place.category == 'restaurant' && !_filterRestaurant) return false;
+                        if (place.category == 'fastfood' && !_filterFastFood) return false;
+
+                        // ==========================================
+                        // 👉 ВСТАВТЕ ЦЮ ПЕРЕВІРКУ ТУТ:
+                        // ==========================================
+                        final LatLng placePoint = LatLng(place.lat, place.lng);
+                        if (!_isWithinRadius(placePoint)) return false;
+
+                        return true; // Закінчення фільтрації
+                      })
                       .map((place) {
                     // Визначаємо іконку та колір залежно від категорії у PlaceModel
                     IconData iconData = Icons.restaurant;
